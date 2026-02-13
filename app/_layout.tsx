@@ -1,3 +1,4 @@
+import React from 'react';
 import '../global.css';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -39,10 +40,11 @@ export default function Layout() {
         );
     }
 
+
     return (
         <View style={{ flex: 1 }}>
-            <Stack>
-                <Stack.Screen name="index" options={{ title: 'Home', headerShown: false }} />
+            <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="index" options={{ title: 'Home' }} />
             </Stack>
         </View>
     );
