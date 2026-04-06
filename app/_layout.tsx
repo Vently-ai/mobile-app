@@ -1,34 +1,53 @@
-import React from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import '../global.css';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect, useState, useCallback } from 'react';
 import { View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ColorManagementLoadingScreen } from '../components';
+import { api } from '../services/api';
+import { AppProvider, useApp } from '../contexts/AppContext';
 
-// Prevent Auto hide splash screen
 SplashScreen.preventAutoHideAsync();
 
-export default function Layout() {
+export function Layout() {
     const [appIsReady, setAppIsReady] = useState(false);
+    const { setSessionId, setMessages } = useApp();
 
     useEffect(() => {
         async function prepare() {
             try {
-                // Replace with data loading later najaaa
-                await new Promise(resolve => setTimeout(resolve, 2000));
+                const response = await api.get<{ sessions: any[] }>('/sessions?mode=1');
+
+                if (response && response.sessions && response.sessions.length > 0) {
+                    const activeSessionId = response.sessions[0].session_id;
+                    
+                    const history = await api.get<{ messages: any[] }>(`/sessions/${activeSessionId}/messages`);
+                    
+                    setSessionId(activeSessionId);
+                    setMessages(Array.isArray(history.messages) ? history.messages : []);
+                } else {
+                    const newSession = await api.post<{ session_id: string, question: string }>('/sessions', {});
+                    
+                    setSessionId(newSession.session_id);
+                    setMessages([{
+                        role: 'assistant',
+                        content: newSession.question || 'Hello! How are you feeling today?',
+                        timestamp: new Date().toISOString()
+                    }]);
+                }
             } catch (e) {
-                console.warn(e);
+                console.error("Initialization error:", e);
+
+                setSessionId("fallback-001");
             } finally {
                 setAppIsReady(true);
             }
         }
-
         prepare();
     }, []);
 
     const onLayoutRootView = useCallback(async () => {
-        // Hide splash screen
         await SplashScreen.hideAsync();
     }, []);
 
@@ -40,12 +59,23 @@ export default function Layout() {
         );
     }
 
-
     return (
-        <View style={{ flex: 1 }}>
-            <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="index" options={{ title: 'Home' }} />
+        <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+            <Stack screenOptions={{ headerShown: false }} initialRouteName="login">
+                <Stack.Screen name="index" />
+                <Stack.Screen name="history" />
+                <Stack.Screen name="diary" />
             </Stack>
         </View>
     );
+}
+
+export default function LayoutWrapper() {
+  return (
+    <SafeAreaProvider>
+      <AppProvider>
+        <Layout />
+      </AppProvider>
+    </SafeAreaProvider>
+  );
 }

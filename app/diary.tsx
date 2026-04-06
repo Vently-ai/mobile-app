@@ -1,56 +1,106 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Dimensions, ScrollView, Modal, FlatList } from 'react-native';
+import { View, Text, TouchableOpacity, Dimensions, ScrollView, Modal, FlatList, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useApp } from '../contexts/AppContext';
+import { api } from '../services/api';
 
 const { width } = Dimensions.get('window');
 
-const PAGES = [
-  {
-    id: '1',
-    date: '2026-02-10',
-    title: 'My Diary',
-    body: `Today I don't feel like doing anything. I just wanna lay in my bed.`,
-  },
-  {
-    id: '2',
-    date: '2026-02-09',
-    title: 'My Diary',
-    body: `Feeling shitty in my bed, didn't take my f**king meds, hyperpop up in my ears, everything just dissapears, don't wanna be someone else, just don't wanna hate myself, instead I'm wanna feel good.`,
-  },
-  {
-    id: '3',
-    date: '2026-02-08',
-    title: 'My Diary',
-    body: `Never gonna give you up, Never gonna let you down, Never gonna run around and desert you. Never gonna make you cry, Never gonna say goodbye, Never gonna tell a lie and hurt you.`,
-  },
-  {
-    id: '4',
-    date: '2026-02-05',
-    title: 'My Diary',
-    body: `I'll blow up into smithereens and spew my tiny symphony all up and down a city street while tryna put my mind at ease like finishing this melody this feels like a necessity so this could be the death of me or maybe just a better me now, come in with the timpanis and take a shot of Hennessy I know I'm not there mentally but you could be the remedy so let me play my violin for you`,
-  },
-  {
-    id: '5',
-    date: '2026-02-04',
-    title: 'My Diary',
-    body: `Don't you want me like I want you, baby don't you need me like I need you now sleep tomorrow but tonight go crazy all you gotta do is just meet me at the`,
-  },
-];
+export interface DiaryEntry {
+  id: string;
+  date: string;
+  title: string;
+  body: string;
+}
+
+
+// const PAGES = [
+//   {
+//     id: '1',
+//     date: '2026-02-10',
+//     title: 'My Diary',
+//     body: `Today I don't feel like doing anything. I just wanna lay in my bed.`,
+//   },
+//   {
+//     id: '2',
+//     date: '2026-02-09',
+//     title: 'My Diary',
+//     body: `Feeling shitty in my bed, didn't take my f**king meds, hyperpop up in my ears, everything just dissapears, don't wanna be someone else, just don't wanna hate myself, instead I'm wanna feel good.`,
+//   },
+//   {
+//     id: '3',
+//     date: '2026-02-08',
+//     title: 'My Diary',
+//     body: `Never gonna give you up, Never gonna let you down, Never gonna run around and desert you. Never gonna make you cry, Never gonna say goodbye, Never gonna tell a lie and hurt you.`,
+//   },
+//   {
+//     id: '4',
+//     date: '2026-02-05',
+//     title: 'My Diary',
+//     body: `I'll blow up into smithereens and spew my tiny symphony all up and down a city street while tryna put my mind at ease like finishing this melody this feels like a necessity so this could be the death of me or maybe just a better me now, come in with the timpanis and take a shot of Hennessy I know I'm not there mentally but you could be the remedy so let me play my violin for you`,
+//   },
+//   {
+//     id: '5',
+//     date: '2026-02-04',
+//     title: 'My Diary',
+//     body: `Don't you want me like I want you, baby don't you need me like I need you now sleep tomorrow but tonight go crazy all you gotta do is just meet me at the`,
+//   },
+// ];
 
 export default function DiaryPage() {
   const [index, setIndex] = useState(0);
-  const [showDatePicker, setShowDatePicker] = useState(true);
-  const [pages] = useState(PAGES);
-
-  const current = pages[index];
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [pages, setPages] = useState<DiaryEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const params = useLocalSearchParams();
   const router = useRouter();
+  const { sessionId } = useApp();
+
+  useEffect(() => {
+    const fetchDiary = async () => {
+      if (!sessionId) {
+        setIsLoading(false);
+        return;
+      }
+      
+      setIsLoading(true);
+      try {
+        const response = await api.get<{ summarized_entries?: string[] }>(
+          `/sessions/${sessionId}/user/summarized_diary?n=5&sf=0`
+        );
+        
+        if (response && response.summarized_entries && response.summarized_entries.length > 0) {
+          const mappedPages = response.summarized_entries.map((entry, idx) => {
+            const date = new Date();
+            date.setDate(date.getDate() - idx);
+            return {
+              id: String(idx + 1),
+              date: date.toISOString().split('T')[0],
+              title: 'My Diary',
+              body: entry
+            };
+          });
+          setPages(mappedPages);
+        } else {
+          setPages([]);
+        }
+      } catch (error) {
+        console.error('Failed to fetch diary entries:', error);
+        setPages([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchDiary();
+  }, [sessionId]);
+
   useEffect(() => {
     const paramDate = params.date as string | undefined;
-    if (paramDate) {
+    if (paramDate && pages.length > 0) {
       const parsed = new Date(paramDate);
       if (!isNaN(parsed.getTime())) {
         const found = pages.findIndex(p => {
@@ -64,12 +114,40 @@ export default function DiaryPage() {
         }
       }
     }
-  }, [params.date]);
+  }, [params.date, pages]);
 
   const handleSelectDate = (selectedIndex: number) => {
     setIndex(selectedIndex);
     setShowDatePicker(false);
   };
+
+  if (isLoading) {
+    return (
+      <LinearGradient colors={['#E0C3FC', '#CBB4F4', '#FFFFFF']} style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color="#5B49E9" />
+      </LinearGradient>
+    );
+  }
+
+  if (pages.length === 0) {
+    return (
+      <LinearGradient colors={['#E0C3FC', '#CBB4F4', '#FFFFFF']} style={{ flex: 1, alignItems: 'center' }}>
+        <View style={{ paddingTop: 56, paddingHorizontal: 24, paddingBottom: 16, width: '100%' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+            <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 12 }}>
+              <Ionicons name="arrow-back" size={24} color="white" />
+            </TouchableOpacity>
+            <Text style={{ color: 'white', textAlign: 'left', fontSize: 20, fontWeight: '700' }}>My Diary</Text>
+          </View>
+        </View>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ color: '#5B49E9', fontSize: 18, fontWeight: '600' }}>No diary entries found.</Text>
+        </View>
+      </LinearGradient>
+    );
+  }
+
+  const current = pages[index];
 
   return (
     <LinearGradient colors={['#E0C3FC', '#CBB4F4', '#FFFFFF']} style={{ flex: 1, alignItems: 'center' }}>
@@ -169,11 +247,11 @@ export default function DiaryPage() {
         </View>
 
         <TouchableOpacity
-          onPress={() => index < PAGES.length - 1 && setIndex(index + 1)}
-          disabled={index === PAGES.length - 1}
+          onPress={() => index < pages.length - 1 && setIndex(index + 1)}
+          disabled={index === pages.length - 1}
           style={{ padding: 8 }}
         >
-          <Ionicons name="chevron-forward" size={28} color={index === PAGES.length - 1 ? '#CCC' : '#5B49E9'} />
+          <Ionicons name="chevron-forward" size={28} color={index === pages.length - 1 ? '#CCC' : '#5B49E9'} />
         </TouchableOpacity>
       </View>
     </LinearGradient>
