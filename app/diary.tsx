@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useApp } from '../contexts/AppContext';
 import { api } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 const { width } = Dimensions.get('window');
 
@@ -58,30 +59,52 @@ export default function DiaryPage() {
   const params = useLocalSearchParams();
   const router = useRouter();
   const { sessionId } = useApp();
+  const { accessToken } = useAuth();
+
+
 
   useEffect(() => {
     const fetchDiary = async () => {
-      if (!sessionId) {
+      if (!accessToken) {
         setIsLoading(false);
         return;
       }
-      
       setIsLoading(true);
       try {
-        const response = await api.get<{ summarized_entries?: string[] }>(
-          `/sessions/${sessionId}/user/summarized_diary?n=5&sf=0`
+        // 1. Fetch the user's recent sessions first
+        const sessionsResponse = await api.get<{ sessions?: { session_id: string, start_timestamp: string }[] }>(
+          '/sessions?mode=0',
+          accessToken
         );
-        
-        if (response && response.summarized_entries && response.summarized_entries.length > 0) {
-          const mappedPages = response.summarized_entries.map((entry, idx) => {
-            const date = new Date();
-            date.setDate(date.getDate() - idx);
-            return {
-              id: String(idx + 1),
-              date: date.toISOString().split('T')[0],
-              title: 'My Diary',
-              body: entry
-            };
+
+        if (sessionsResponse && sessionsResponse.sessions && sessionsResponse.sessions.length > 0) {
+          // 2. Take up to the 5 most recent sessions
+          const recentSessions = sessionsResponse.sessions.slice(0, 5);
+          
+          // 3. Fetch the diary for each of those sessions using the working /user/diary route
+          const diaryPromises = recentSessions.map(session =>
+            api.get<{ diary?: string, date?: string }>(
+              `/diary/user/diary?id=${session.session_id}`,
+              accessToken
+            ).catch(err => null) // Ignore errors for individual missing diaries
+          );
+
+          const diaryResults = await Promise.all(diaryPromises);
+          const mappedPages: DiaryEntry[] = [];
+
+          diaryResults.forEach((res, idx) => {
+            if (res && res.diary) {
+              const dateToParse = res.date || recentSessions[idx].start_timestamp;
+              const parsedDate = new Date(dateToParse);
+              const dateStr = !isNaN(parsedDate.getTime()) ? parsedDate.toISOString().split('T')[0] : 'Unknown Date';
+              
+              mappedPages.push({
+                id: recentSessions[idx].session_id,
+                date: dateStr,
+                title: 'My Diary',
+                body: res.diary
+              });
+            }
           });
           setPages(mappedPages);
         } else {
@@ -94,9 +117,8 @@ export default function DiaryPage() {
         setIsLoading(false);
       }
     };
-
     fetchDiary();
-  }, [sessionId]);
+  }, [accessToken]);
 
   useEffect(() => {
     const paramDate = params.date as string | undefined;

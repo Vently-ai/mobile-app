@@ -1,27 +1,56 @@
 import React, { useState } from 'react';
-import {View,Text,Image,TextInput,TouchableOpacity,ScrollView,KeyboardAvoidingView,Platform,} from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { View, Text, Image, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, Link } from 'expo-router';
+import { useAuth } from '../contexts/AuthContext'
 
 export default function SignUpPage() {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
+  const [nickname, setNickname] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const { signup } = useAuth();
 
-  const handleSignUp = () => {
-    console.log({ name, email, password, confirmPassword, termsAccepted });
-    router.navigate('/');
+  const handleSignUp = async () => {
+    setError('');
+
+    if (!username.trim() || !nickname.trim() || !password || !confirmPassword) {
+      setError('Please fill in all fields.');
+      return;
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+    if (!termsAccepted) {
+      setError('Please accept the terms & policy.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await signup(username.trim(), nickname.trim(), password);
+      router.replace('/');
+    } catch (err: any) {
+      setError(err.message || 'Sign up failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
-    <LinearGradient
-      colors={['#E0C3FC', '#CBB4F4', '#FFFFFF']}
-      className="flex-1"
-    >
+    <LinearGradient colors={['#E0C3FC', '#CBB4F4', '#FFFFFF']} className="flex-1">
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -47,50 +76,69 @@ export default function SignUpPage() {
           </View>
 
           {/* Title */}
-          <Text className="text-3xl font-bold text-center mt-8 mb-8 text-[#5B49E9]">
+          <Text className="text-3xl font-bold text-center mt-8 mb-4 text-[#5B49E9]">
             Create your account
           </Text>
 
+          {/* Error message */}
+          {error ? (
+            <View className="w-full px-8 mb-2">
+              <Text className="text-red-500 text-sm text-center">{error}</Text>
+            </View>
+          ) : null}
+
           {/* Form Fields */}
           <View className="w-full px-8">
-            <Text className="text-base font-semibold mb-2 text-[#5B49E9]">Name</Text>
+            <Text className="text-base font-semibold mb-2 text-[#5B49E9]">Username</Text>
             <TextInput
               className="w-full h-12 px-4 bg-white/60 rounded-2xl mb-4 border border-purple-200"
-              placeholder="Your full name"
+              placeholder="ex: jon.smith"
               placeholderTextColor="#9CA3AF"
-              value={name}
-              onChangeText={setName}
+              autoCapitalize="none"
+              value={username}
+              onChangeText={setUsername}
             />
 
-            <Text className="text-base font-semibold mb-2 text-[#5B49E9]">Email</Text>
+            <Text className="text-base font-semibold mb-2 text-[#5B49E9]">Nickname</Text>
             <TextInput
               className="w-full h-12 px-4 bg-white/60 rounded-2xl mb-4 border border-purple-200"
-              placeholder="ex: jon.smith@email.com"
+              placeholder="Your display name"
               placeholderTextColor="#9CA3AF"
-              keyboardType="email-address"
-              value={email}
-              onChangeText={setEmail}
+              value={nickname}
+              onChangeText={setNickname}
             />
 
             <Text className="text-base font-semibold mb-2 text-[#5B49E9]">Password</Text>
-            <TextInput
-              className="w-full h-12 px-4 bg-white/60 rounded-2xl mb-4 border border-purple-200"
-              placeholder="********"
-              placeholderTextColor="#9CA3AF"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: 16, borderWidth: 1, borderColor: '#A78BFA', marginBottom: 16 }}>
+              <TextInput
+                className="flex-1 h-12 px-4"
+                placeholder="********"
+                placeholderTextColor="#9CA3AF"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+                style={{ backgroundColor: 'transparent' }}
+              />
+              <TouchableOpacity onPress={() => setShowPassword((v) => !v)} style={{ paddingHorizontal: 12 }}>
+                <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={22} color="#A78BFA" />
+              </TouchableOpacity>
+            </View>
 
             <Text className="text-base font-semibold mb-2 text-[#5B49E9]">Confirm password</Text>
-            <TextInput
-              className="w-full h-12 px-4 bg-white/60 rounded-2xl mb-6 border border-purple-200"
-              placeholder="********"
-              placeholderTextColor="#9CA3AF"
-              secureTextEntry
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-            />
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F3F4F6', borderRadius: 16, borderWidth: 1, borderColor: '#A78BFA', marginBottom: 24 }}>
+              <TextInput
+                className="flex-1 h-12 px-4"
+                placeholder="********"
+                placeholderTextColor="#9CA3AF"
+                secureTextEntry={!showConfirmPassword}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                style={{ backgroundColor: 'transparent' }}
+              />
+              <TouchableOpacity onPress={() => setShowConfirmPassword((v) => !v)} style={{ paddingHorizontal: 12 }}>
+                <Ionicons name={showConfirmPassword ? 'eye-off' : 'eye'} size={22} color="#A78BFA" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Checkbox */}
@@ -112,10 +160,14 @@ export default function SignUpPage() {
           {/* SIGN UP Button */}
           <TouchableOpacity
             className="w-64 h-14 mt-4 rounded-2xl items-center justify-center"
-            style={{ backgroundColor: '#B4A2FF' }}
+            style={{ backgroundColor: isLoading ? '#C4B5FD' : '#B4A2FF' }}
             onPress={handleSignUp}
+            disabled={isLoading}
           >
-            <Text className="text-white font-bold text-xl">SIGN UP</Text>
+            {isLoading
+              ? <ActivityIndicator color="white" />
+              : <Text className="text-white font-bold text-xl">SIGN UP</Text>
+            }
           </TouchableOpacity>
 
           {/* Footer */}
@@ -123,9 +175,7 @@ export default function SignUpPage() {
             <Text className="text-base text-gray-500">Have an account? </Text>
             <Link href="/login" asChild>
               <TouchableOpacity>
-                <View>
-                  <Text className="text-base font-semibold text-cyan-500">SIGN IN</Text>
-                </View>
+                <Text className="text-base font-semibold text-cyan-500">SIGN IN</Text>
               </TouchableOpacity>
             </Link>
           </View>

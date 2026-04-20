@@ -7,45 +7,46 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ColorManagementLoadingScreen } from '../components';
 import { api } from '../services/api';
 import { AppProvider, useApp } from '../contexts/AppContext';
+import { useAuth } from '../contexts/AuthContext';
 
 SplashScreen.preventAutoHideAsync();
 
 export function Layout() {
     const [appIsReady, setAppIsReady] = useState(false);
     const { setSessionId, setMessages } = useApp();
+    const { isAuthenticated, isLoading, accessToken } = useAuth();
 
     useEffect(() => {
         async function prepare() {
-            try {
-                const response = await api.get<{ sessions: any[] }>('/sessions?mode=1');
+            if (isLoading) return; // Wait for AuthContext to finish restoring session
 
-                if (response && response.sessions && response.sessions.length > 0) {
-                    const activeSessionId = response.sessions[0].session_id;
-                    
-                    const history = await api.get<{ messages: any[] }>(`/sessions/${activeSessionId}/messages`);
-                    
-                    setSessionId(activeSessionId);
-                    setMessages(Array.isArray(history.messages) ? history.messages : []);
-                } else {
-                    const newSession = await api.post<{ session_id: string, question: string }>('/sessions', {});
-                    
-                    setSessionId(newSession.session_id);
-                    setMessages([{
-                        role: 'assistant',
-                        content: newSession.question || 'Hello! How are you feeling today?',
-                        timestamp: new Date().toISOString()
-                    }]);
+            try {
+                if (isAuthenticated && accessToken) {
+                    const response = await api.get<{ sessions: any[] }>('/sessions?mode=1', accessToken);
+                    if (response && response.sessions && response.sessions.length > 0) {
+                        const activeSessionId = response.sessions[0].session_id;
+                        const history = await api.get<{ messages: any[] }>(`/sessions/${activeSessionId}/messages`, accessToken);
+                        setSessionId(activeSessionId);
+                        setMessages(Array.isArray(history.messages) ? history.messages : []);
+                    } else {
+                        const newSession = await api.post<{ session_id: string, question: string }>('/sessions', {}, accessToken);
+                        setSessionId(newSession.session_id);
+                        setMessages([{
+                            role: 'assistant',
+                            content: newSession.question || 'Hello! How are you feeling today?',
+                            timestamp: new Date().toISOString()
+                        }]);
+                    }
                 }
             } catch (e) {
                 console.error("Initialization error:", e);
-
                 setSessionId("fallback-001");
             } finally {
                 setAppIsReady(true);
             }
         }
         prepare();
-    }, []);
+    }, [isAuthenticated, isLoading, accessToken]);
 
     const onLayoutRootView = useCallback(async () => {
         await SplashScreen.hideAsync();
@@ -70,12 +71,16 @@ export function Layout() {
     );
 }
 
+import { AuthProvider } from '../contexts/AuthContext';
+
 export default function LayoutWrapper() {
-  return (
-    <SafeAreaProvider>
-      <AppProvider>
-        <Layout />
-      </AppProvider>
-    </SafeAreaProvider>
-  );
+    return (
+        <SafeAreaProvider>
+            <AuthProvider>
+                <AppProvider>
+                    <Layout />
+                </AppProvider>
+            </AuthProvider>
+        </SafeAreaProvider>
+    );
 }

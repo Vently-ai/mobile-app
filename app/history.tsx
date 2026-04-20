@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useApp } from '../contexts/AppContext';
 import { api } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 export interface HistoryItem {
   id: string;
@@ -22,13 +23,14 @@ interface SessionResponse {
 export default function HistoryPage() {
   const router = useRouter();
   const { sessionId, setSessionId, setMessages } = useApp();
+  const { accessToken } = useAuth();
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-        const response = await api.get<{ sessions?: SessionResponse[] }>('/sessions?mode=0');
+        const response = await api.get<{ sessions?: SessionResponse[] }>('/sessions?mode=0', accessToken);
         if (response && response.sessions && response.sessions.length > 0) {
           const mapped = response.sessions.map((session) => {
             const dateObj = new Date(session.start_timestamp);
@@ -96,7 +98,7 @@ export default function HistoryPage() {
                 }
                 setIsLoading(true);
                 try {
-                  const historyData = await api.get<{ messages: any[] }>(`/sessions/${item.id}/messages`);
+                  const historyData = await api.get<{ messages: any[] }>(`/sessions/${item.id}/messages`, accessToken);
                   setSessionId(item.id);
                   setMessages(Array.isArray(historyData.messages) ? historyData.messages : []);
                   router.navigate('/');
